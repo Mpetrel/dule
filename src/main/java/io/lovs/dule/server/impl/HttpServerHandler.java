@@ -1,12 +1,11 @@
 package io.lovs.dule.server.impl;
 
+import io.netty.buffer.Unpooled;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
-import io.netty.handler.codec.http.HttpHeaderNames;
-import io.netty.handler.codec.http.HttpHeaders;
-import io.netty.handler.codec.http.HttpRequest;
+import io.netty.handler.codec.http.*;
 import io.netty.handler.codec.http.websocketx.WebSocketServerHandshaker;
-import io.netty.handler.codec.http.websocketx.WebSocketServerHandshakerFactory;
+
 
 /**
  * @program: dule
@@ -22,41 +21,26 @@ public class HttpServerHandler extends ChannelInboundHandlerAdapter {
         if (msg instanceof HttpRequest) {
             HttpRequest httpRequest = (HttpRequest)msg;
             System.out.println("http request received");
+            FullHttpResponse response = new DefaultFullHttpResponse(HttpVersion.HTTP_1_1,
+                    HttpResponseStatus.OK, Unpooled.wrappedBuffer("hello world".getBytes()));
+            response.headers().set(HttpHeaderNames.CONTENT_TYPE, "text/plain;charset=UTF-8");
+            response.headers().set(HttpHeaderNames.CONTENT_LENGTH, response.content().readableBytes());
+            response.headers().set(HttpHeaderNames.CONNECTION, HttpHeaderValues.KEEP_ALIVE);
+            ctx.write(response);
+            ctx.flush();
 
-            HttpHeaders headers = httpRequest.headers();
-            System.out.println("Connection: " + headers.get("Connection"));
-            System.out.println("Upgrade: " + headers.get("Upgrade"));
-
-            if ("Upgrade".equalsIgnoreCase(headers.get(HttpHeaderNames.CONNECTION)) &&
-                    "WebSocket".equalsIgnoreCase(headers.get(HttpHeaderNames.UPGRADE))) {
-                ctx.pipeline().replace(this, "webSocketHandler", new WebSocketHandler());
-                System.out.println("WebSocketHandler added to the pipeline");
-                System.out.println("Opened Channel : " + ctx.channel());
-                System.out.println("Handshaking....");
-                //Do the Handshake to upgrade connection from HTTP to WebSocket protocol
-                handleHandshake(ctx, httpRequest);
-                System.out.println("Handshake is done");
-            }
         }
     }
 
-    protected void handleHandshake(ChannelHandlerContext ctx, HttpRequest req) {
-        WebSocketServerHandshakerFactory wsFactory = new WebSocketServerHandshakerFactory(getWebSocketURL(req),
-                null, true);
-        handshaker = wsFactory.newHandshaker(req);
-        if (handshaker == null) {
-            WebSocketServerHandshakerFactory.sendUnsupportedVersionResponse(ctx.channel());
-        } else {
-            handshaker.handshake(ctx.channel(), req);
-        }
-
+    @Override
+    public void channelReadComplete(ChannelHandlerContext ctx) throws Exception {
+        System.out.println("read complete!");
+        ctx.flush();
     }
 
-
-    protected String getWebSocketURL(HttpRequest req) {
-        System.out.println("Req URI : " + req.uri());
-        String url =  "ws://" + req.headers().get("Host") + req.getUri() ;
-        System.out.println("Constructed URL : " + url);
-        return url;
+    @Override
+    public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception {
+        ctx.close();
+        cause.printStackTrace();
     }
 }
